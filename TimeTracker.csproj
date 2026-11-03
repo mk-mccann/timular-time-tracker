@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>TimeTracker</RootNamespace>
+    <AssemblyName>TimularTracker</AssemblyName>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
+  </PropertyGroup>
+
+  <!-- Target platform = the RID (-r on the command line), defaulting to the machine you build on. -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == ''">
+    <HostArch>$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant())</HostArch>
+    <RuntimeIdentifier Condition="$([MSBuild]::IsOSPlatform('Windows'))">win-$(HostArch)</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="$([MSBuild]::IsOSPlatform('OSX'))">osx-$(HostArch)</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="$([MSBuild]::IsOSPlatform('Linux'))">linux-$(HostArch)</RuntimeIdentifier>
+  </PropertyGroup>
+
+  <!-- Windows: WinRT Bluetooth + WinForms tray icon. No console window; the app lives in the tray (see Tray.cs). -->
+  <PropertyGroup Condition="$(RuntimeIdentifier.StartsWith('win'))">
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <OutputType>WinExe</OutputType>
+    <UseWindowsForms>true</UseWindowsForms>
+    <DefineConstants>$(DefineConstants);WINDOWS</DefineConstants>
+  </PropertyGroup>
+  <!-- macOS / Linux: plain console app, no tray. -->
+  <PropertyGroup Condition="!$(RuntimeIdentifier.StartsWith('win'))">
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <PropertyGroup Condition="$(RuntimeIdentifier.StartsWith('linux'))">
+    <DefineConstants>$(DefineConstants);LINUX</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="$(RuntimeIdentifier.StartsWith('osx'))">
+    <DefineConstants>$(DefineConstants);MACOS</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Static files aren't bundled into a single-file exe, so the page is embedded instead. -->
+    <Content Remove="wwwroot\**" />
+    <EmbeddedResource Include="wwwroot\index.html" LogicalName="index.html" />
+  </ItemGroup>
+  <!-- Each platform compiles only its own Bluetooth backend (ZeiLink*.cs) and tray. -->
+  <ItemGroup>
+    <Compile Remove="Tray.cs;ZeiLinkWindows.cs" Condition="!$(RuntimeIdentifier.StartsWith('win'))" />
+    <Compile Remove="ZeiLinkLinux.cs" Condition="!$(RuntimeIdentifier.StartsWith('linux'))" />
+    <Compile Remove="ZeiLinkMac.cs" Condition="!$(RuntimeIdentifier.StartsWith('osx'))" />
+    <Compile Remove="mac\**" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="ClosedXML" Version="0.105.1" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+    <PackageReference Include="Linux.Bluetooth" Version="5.67.1" Condition="$(RuntimeIdentifier.StartsWith('linux'))" />
+  </ItemGroup>
+</Project>
