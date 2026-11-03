@@ -1,0 +1,4 @@
+C:\Users\matt\AppData\Local\Temp\claude\c--Users-matt-repos-timular-time-tracker\e6f1297b-7491-4679-9720-286e55250a25\scratchpad\pub\dist\web.config
+C:\Users\matt\AppData\Local\Temp\claude\c--Users-matt-repos-timular-time-tracker\e6f1297b-7491-4679-9720-286e55250a25\scratchpad\pub\dist\TimularTracker.staticwebassets.endpoints.json
+C:\Users\matt\AppData\Local\Temp\claude\c--Users-matt-repos-timular-time-tracker\e6f1297b-7491-4679-9720-286e55250a25\scratchpad\pub\TimularTracker.pdb
+C:\Users\matt\AppData\Local\Temp\claude\c--Users-matt-repos-timular-time-tracker\e6f1297b-7491-4679-9720-286e55250a25\scratchpad\pub\TimularTracker.exe

@@ -1,0 +1,2 @@
+C:\Users\matt\repos\timular-time-tracker\dist\TimularTracker.pdb
+C:\Users\matt\repos\timular-time-tracker\dist\TimularTracker.exe
