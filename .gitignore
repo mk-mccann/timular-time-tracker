@@ -1,0 +1,32 @@
+# Build output
+bin/
+obj/
+dist/
+publish/
+*.nupkg
+
+# Local data (the app keeps its db and log in the user data folder, but just in case)
+*.db
+*.db-shm
+*.db-wal
+tracker.log
+
+# IDE / editor
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.rsuite
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Compiled macOS Bluetooth helper (built from mac/zei-ble.swift by mac/build.sh)
+zei-ble
+!mac/zei-ble.swift
+
+# Claude Code local settings
+.claude/settings.local.json

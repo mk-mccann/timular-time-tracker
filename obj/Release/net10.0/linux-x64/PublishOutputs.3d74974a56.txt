@@ -1,4 +1,0 @@
-C:\Users\matt\AppData\Local\Temp\pub-linux\dist\web.config
-C:\Users\matt\AppData\Local\Temp\pub-linux\dist\TimularTracker.staticwebassets.endpoints.json
-C:\Users\matt\AppData\Local\Temp\pub-linux\TimularTracker.pdb
-C:\Users\matt\AppData\Local\Temp\pub-linux\TimularTracker
