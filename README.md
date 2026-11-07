@@ -1,5 +1,7 @@
 # Timular Time Tracker
 
+A time tracking web app to interface with the Timular ZEI device now that Timular charges a subscription for their product. Built with Claude, so no promises that it's robust. 
+
 Run: `dotnet run` (opens http://localhost:5178). Works on Windows, macOS and Linux. Data lives in:
 
 - Windows: `%LOCALAPPDATA%\TimularTracker\`
