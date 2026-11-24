@@ -41,6 +41,8 @@
   dialog::backdrop { background:#0006; }
   dialog label { display:grid; gap:3px; margin-bottom:10px; font-size:13px; color:var(--muted); }
   dialog input, dialog select { width:100%; }
+  dialog label.check { display:flex; align-items:center; gap:6px; color:var(--text); }
+  dialog label.check input { width:auto; }
 </style>
 </head>
 <body>
@@ -48,6 +50,7 @@
   <header>
     <h1>Time Tracker</h1>
     <span id="dev" class="pill">ZEI: …</span>
+    <span id="syncPill" class="pill" hidden>Sync</span>
   </header>
 
   <section class="card">
@@ -56,7 +59,10 @@
         <div id="nowName" class="idle">Nothing running</div>
         <div id="nowTimer" class="timer">0:00:00</div>
       </div>
-      <button id="stopBtn" class="danger" hidden>■ Stop</button>
+      <div class="row">
+        <label id="nowClientWrap" class="muted" hidden>Client <select id="nowClient"></select></label>
+        <button id="stopBtn" class="danger" hidden>■ Stop</button>
+      </div>
     </div>
     <div id="acts" class="acts"></div>
   </section>
@@ -80,7 +86,7 @@
       <button id="addEntry" class="small">+ Add entry</button>
     </div>
     <table>
-      <thead><tr><th>Project / task</th><th>Start</th><th>End</th><th class="num">Duration</th><th></th></tr></thead>
+      <thead><tr><th>Project / task</th><th>Client</th><th>Start</th><th>End</th><th class="num">Duration</th><th></th></tr></thead>
       <tbody id="entries"></tbody>
     </table>
   </section>
@@ -99,25 +105,39 @@
   <section class="card">
     <div class="row" style="margin-bottom:10px"><h2 style="margin:0">Projects / tasks &amp; ZEI sides</h2><span class="spacer"></span>
       <button id="addAct" class="small">+ New</button></div>
-    <table><thead><tr><th>Name</th><th>Client</th><th>ZEI side</th><th></th></tr></thead><tbody id="actList"></tbody></table>
-    <p class="muted" style="margin-bottom:0;font-size:13px">Assign each project to a side number (1–8). Flipping the tracker to that side starts it; the previous one stops automatically. Number the sides in the order shown in the Timeular docs, or flip and watch which number appears in the header.</p>
+    <table><thead><tr><th>ZEI side</th><th>Name</th><th>Billable</th><th></th></tr></thead><tbody id="actList"></tbody></table>
+    <p class="muted" style="margin-bottom:0;font-size:13px">Assign each project to a side number (1–8). Flipping the tracker to that side starts it; the previous one stops automatically. Number the sides in the order shown in the Timeular docs, or flip and watch which number appears in the header. A new entry keeps the client of whatever was running before it.</p>
+  </section>
+
+  <section class="card">
+    <div class="row" style="margin-bottom:10px"><h2 style="margin:0">Clients &amp; rates</h2><span class="spacer"></span>
+      <button id="addClient" class="small">+ New</button></div>
+    <table><thead><tr><th>Client</th><th class="num">Hourly rate</th><th></th></tr></thead><tbody id="clientList"></tbody></table>
+    <p class="muted" style="margin-bottom:0;font-size:13px">Each entry stores the rate in effect when it was logged, so changing a rate only affects new entries. Edit an entry to change its rate.</p>
   </section>
 </main>
 
 <dialog id="actDlg"><form method="dialog" id="actForm">
   <label>Name<input name="name" required></label>
-  <label>Client<input name="client" list="clients"></label>
-  <datalist id="clients"></datalist>
   <label>ZEI side<select name="side"><option value="">— none —</option></select></label>
+  <label class="check"><input type="checkbox" name="billable"> Billable</label>
   <div class="row"><span class="spacer"></span><button value="cancel">Cancel</button><button class="primary" value="ok">Save</button></div>
 </form></dialog>
 
 <dialog id="entDlg"><form method="dialog" id="entForm">
   <label>Project / task<select name="activityId" required></select></label>
+  <label>Client<select name="client"></select></label>
+  <label>Hourly rate<input type="number" step="0.01" min="0" name="rate"></label>
   <label>Start<input type="datetime-local" step="1" name="start" required></label>
   <label>End (blank = still running)<input type="datetime-local" step="1" name="end"></label>
   <label>Note<input name="note"></label>
   <div class="row"><button type="button" id="entDelete" class="danger">Delete</button><span class="spacer"></span><button value="cancel">Cancel</button><button class="primary" value="ok">Save</button></div>
+</form></dialog>
+
+<dialog id="cliDlg"><form method="dialog" id="cliForm">
+  <label>Name<input name="name" required></label>
+  <label>Hourly rate<input type="number" step="0.01" min="0" name="rate" required></label>
+  <div class="row"><span class="spacer"></span><button value="cancel">Cancel</button><button class="primary" value="ok">Save</button></div>
 </form></dialog>
 
 <script>
@@ -135,29 +155,50 @@ const localInput = iso => { const d = new Date(iso); return `${ymd(d)}T${pad(d.g
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const label = a => a.client ? `${a.client} — ${a.name}` : a.name;
 
-let state = null, activities = [], segs = [], day = ymd(new Date());
+const money = n => (+n || 0).toFixed(2);
 
-async function loadActivities() {
-  activities = await api('/api/activities');
-  $('acts').innerHTML = activities.map(a =>
-    `<button data-id="${a.id}">${a.side ? `<span class="side">#${a.side}</span>` : ''}${esc(label(a))}</button>`).join('')
-    || '<span class="muted">Add a project below to get started.</span>';
-  $('actList').innerHTML = activities.map(a =>
-    `<tr><td>${esc(a.name)}</td><td>${esc(a.client)}</td><td>${a.side ?? '—'}</td>
-     <td class="num"><button class="small" data-edit="${a.id}">Edit</button> <button class="small danger" data-del="${a.id}">Archive</button></td></tr>`).join('');
-  const clients = [...new Set(activities.map(a => a.client).filter(Boolean))].sort();
-  $('clients').innerHTML = clients.map(c => `<option value="${esc(c)}">`).join('');
+let state = null, activities = [], clients = [], segs = [], day = ymd(new Date());
+
+const rateOf = name => clients.find(c => c.name.toLowerCase() === (name ?? '').toLowerCase())?.rate ?? 0;
+// <option>s for a client <select>; keeps `current` selectable even if that client was archived.
+function clientOptions(current) {
+  let html = '<option value="">— none —</option>' + clients.map(c => `<option value="${esc(c.name)}">${esc(c.name)}</option>`).join('');
+  if (current && !clients.some(c => c.name.toLowerCase() === current.toLowerCase()))
+    html += `<option value="${esc(current)}">${esc(current)} (archived)</option>`;
+  return html;
+}
+
+async function loadClients() {
+  clients = await api('/api/clients');
+  $('clientList').innerHTML = clients.map(c =>
+    `<tr><td>${esc(c.name)}</td><td class="num">${money(c.rate)}</td>
+     <td class="num"><button class="small" data-edit="${c.id}">Edit</button> <button class="small danger" data-del="${c.id}">Archive</button></td></tr>`).join('')
+    || '<tr><td class="muted" colspan="3">No clients yet.</td></tr>';
   const cur = $('expClient').value;
-  $('expClient').innerHTML = '<option value="">All clients</option>' + clients.map(c => `<option>${esc(c)}</option>`).join('');
+  $('expClient').innerHTML = '<option value="">All clients</option>' + clients.map(c => `<option>${esc(c.name)}</option>`).join('');
   $('expClient').value = cur;
   paintState();
 }
 
+async function loadActivities() {
+  activities = await api('/api/activities'); // already sorted by side number
+  $('acts').innerHTML = activities.map(a =>
+    `<button data-id="${a.id}">${a.side ? `<span class="side">#${a.side}</span>` : ''}${esc(label(a))}</button>`).join('')
+    || '<span class="muted">Add a project below to get started.</span>';
+  $('actList').innerHTML = activities.map(a =>
+    `<tr><td>${a.side ?? '—'}</td><td>${esc(a.name)}</td><td>${a.billable ? 'Yes' : '<span class="muted">No</span>'}</td>
+     <td class="num"><button class="small" data-edit="${a.id}">Edit</button> <button class="small danger" data-del="${a.id}">Archive</button></td></tr>`).join('');
+  paintState();
+}
+
 async function loadState() {
-  const before = state?.running?.entryId;
+  const before = state?.running?.entryId, rev = state?.sync?.revision;
   state = await api('/api/state');
   paintState();
-  if (before !== state.running?.entryId) loadDay();
+  if (rev !== undefined && rev !== state.sync.revision) {
+    // Another machine's changes arrived: refresh everything.
+    await loadClients(); await loadActivities(); loadDay();
+  } else if (before !== state.running?.entryId) loadDay();
 }
 
 async function loadDay() { segs = await api('/api/day?date=' + day); paintDay(); }
@@ -167,10 +208,20 @@ function paintState() {
   const d = state.device;
   $('dev').textContent = 'ZEI: ' + d.status + (d.connected ? ` · side ${d.side || '–'} (raw ${d.raw})` : '');
   $('dev').classList.toggle('on', d.connected);
+  const sy = state.sync;
+  $('syncPill').hidden = !sy.enabled;
+  $('syncPill').textContent = sy.status;
+  $('syncPill').classList.toggle('on', sy.status === 'Synced');
   const r = state.running;
   $('nowName').textContent = r ? (r.client ? `${r.client} — ${r.name}` : r.name) : 'Nothing running';
   $('nowName').className = r ? '' : 'idle';
   $('stopBtn').hidden = !r;
+  $('nowClientWrap').hidden = !r;
+  if (r && document.activeElement !== $('nowClient')) {
+    const html = clientOptions(r.client);
+    if ($('nowClient').innerHTML !== html) $('nowClient').innerHTML = html;
+    $('nowClient').value = r.client;
+  }
   document.querySelectorAll('#acts button').forEach(b => b.classList.toggle('active', r && +b.dataset.id === r.activityId));
   tick();
 }
@@ -188,8 +239,9 @@ function paintDay(totalsOnly) {
   let sum = 0;
   for (const s of segs) {
     const sec = segSeconds(s); sum += sec;
-    const t = totals.get(s.activityId) ?? { name: label(s), sec: 0, live: false };
-    t.sec += sec; t.live ||= s.running; totals.set(s.activityId, t);
+    const key = s.activityId + '|' + s.client;
+    const t = totals.get(key) ?? { name: label(s), sec: 0, live: false };
+    t.sec += sec; t.live ||= s.running; totals.set(key, t);
   }
   $('dayTotal').textContent = hms(sum);
   $('totals').innerHTML = [...totals.values()].sort((a, b) => b.sec - a.sec).map(t =>
@@ -201,7 +253,8 @@ function paintDay(totalsOnly) {
     return;
   }
   $('entries').innerHTML = segs.map(s =>
-    `<tr><td>${esc(label(s))}${s.note ? `<div class="muted" style="font-size:12px">${esc(s.note)}</div>` : ''}</td>
+    `<tr><td>${esc(s.name)}${s.billable ? '' : ' <span class="muted" style="font-size:12px">(non-billable)</span>'}${s.note ? `<div class="muted" style="font-size:12px">${esc(s.note)}</div>` : ''}</td>
+     <td>${esc(s.client) || '<span class="muted">—</span>'}${s.client && s.billable ? `<div class="muted" style="font-size:12px">${money(s.rate)}/h</div>` : ''}</td>
      <td>${hhmm(s.start)}</td><td>${s.running ? '<span class="live">running</span>' : hhmm(s.end)}</td>
      <td class="num" data-dur="${s.entryId}">${hms(segSeconds(s))}</td>
      <td class="num"><button class="small" data-entry="${s.entryId}">Edit</button></td></tr>`).join('');
@@ -210,6 +263,7 @@ function paintDay(totalsOnly) {
 // ---- actions ----
 $('acts').onclick = async e => { const b = e.target.closest('button'); if (!b) return; await api('/api/start/' + b.dataset.id, 'POST'); await loadState(); loadDay(); };
 $('stopBtn').onclick = async () => { await api('/api/stop', 'POST'); await loadState(); loadDay(); };
+$('nowClient').onchange = async () => { await api('/api/running/client', 'POST', { name: $('nowClient').value, rate: 0 }); $('nowClient').blur(); await loadState(); loadDay(); };
 
 const setDay = d => { day = d; $('date').value = d; loadDay(); };
 $('date').onchange = () => $('date').value && setDay($('date').value);
@@ -223,7 +277,8 @@ const sideSel = document.querySelector('#actForm [name=side]');
 for (let i = 1; i <= 8; i++) sideSel.insertAdjacentHTML('beforeend', `<option value="${i}">Side ${i}</option>`);
 function openAct(a) {
   editingAct = a; const f = $('actForm');
-  f.name.value = a?.name ?? ''; f.client.value = a?.client ?? ''; f.side.value = a?.side ?? '';
+  f.name.value = a?.name ?? ''; f.side.value = a?.side ?? '';
+  f.billable.checked = a?.billable ?? true;
   $('actDlg').showModal();
 }
 $('addAct').onclick = () => openAct(null);
@@ -235,9 +290,30 @@ $('actList').onclick = async e => {
 $('actForm').onsubmit = async e => {
   if (e.submitter.value !== 'ok') return;
   const f = e.target;
-  const body = { name: f.name.value, client: f.client.value, side: f.side.value ? +f.side.value : null };
+  const body = { name: f.name.value, side: f.side.value ? +f.side.value : null, billable: f.billable.checked };
   await (editingAct ? api('/api/activities/' + editingAct.id, 'PUT', body) : api('/api/activities', 'POST', body));
-  await loadActivities();
+  await loadActivities(); loadDay();
+};
+
+// client dialog
+let editingClient = null;
+function openClient(c) {
+  editingClient = c; const f = $('cliForm');
+  f.name.value = c?.name ?? ''; f.rate.value = c ? c.rate : '';
+  $('cliDlg').showModal();
+}
+$('addClient').onclick = () => openClient(null);
+$('clientList').onclick = async e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.edit) openClient(clients.find(c => c.id == b.dataset.edit));
+  if (b.dataset.del && confirm('Archive this client? Existing entries are kept.')) { await api('/api/clients/' + b.dataset.del, 'DELETE'); await loadClients(); }
+};
+$('cliForm').onsubmit = async e => {
+  if (e.submitter.value !== 'ok') return;
+  const f = e.target;
+  const body = { name: f.name.value, rate: +f.rate.value || 0 };
+  await (editingClient ? api('/api/clients/' + editingClient.id, 'PUT', body) : api('/api/clients', 'POST', body));
+  await loadClients();
 };
 
 // entry dialog
@@ -248,17 +324,23 @@ function openEntry(s) {
   if (s && !activities.some(a => a.id === s.activityId)) f.activityId.insertAdjacentHTML('beforeend', `<option value="${s.activityId}">${esc(label(s))} (archived)</option>`);
   const now = new Date(day + 'T09:00');
   f.activityId.value = s?.activityId ?? activities[0]?.id;
+  const client = s ? s.client : '';
+  f.client.innerHTML = clientOptions(client);
+  f.client.value = client;
+  f.rate.value = s ? s.rate : rateOf(client);
   f.start.value = localInput(s?.start ?? now); f.end.value = s ? (s.running ? '' : localInput(s.end)) : localInput(new Date(now.getTime() + 3600e3));
   f.note.value = s?.note ?? '';
   $('entDelete').hidden = !s;
   $('entDlg').showModal();
 }
-$('addEntry').onclick = () => activities.length ? openEntry(null) : alert('Add a project first.');
+// New entry: picking a client fills in its current rate.
+$('entForm').client.onchange = () => { const f = $('entForm'); f.rate.value = rateOf(f.client.value); };
+$('addEntry').onclick =() => activities.length ? openEntry(null) : alert('Add a project first.');
 $('entries').onclick = e => { const b = e.target.closest('button'); if (b) openEntry(segs.find(s => s.entryId == b.dataset.entry)); };
 $('entForm').onsubmit = async e => {
   if (e.submitter.value !== 'ok') return;
   const f = e.target;
-  const body = { activityId: +f.activityId.value, start: new Date(f.start.value).toISOString(), end: f.end.value ? new Date(f.end.value).toISOString() : null, note: f.note.value };
+  const body = { activityId: +f.activityId.value, client: f.client.value, rate: +f.rate.value || 0, start: new Date(f.start.value).toISOString(), end: f.end.value ? new Date(f.end.value).toISOString() : null, note: f.note.value };
   await (editingEntry ? api('/api/entries/' + editingEntry.entryId, 'PUT', body) : api('/api/entries', 'POST', body));
   await loadState(); loadDay();
 };
@@ -277,7 +359,7 @@ $('exportBtn').onclick = () => {
 
 // init
 $('date').value = day; month();
-loadActivities().then(loadState).then(loadDay);
+loadClients().then(loadActivities).then(loadState).then(loadDay);
 setInterval(tick, 1000);
 setInterval(loadState, 1000); // loadState reloads the day itself when the running entry changes
 setInterval(loadDay, 10000);
