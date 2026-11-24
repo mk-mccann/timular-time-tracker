@@ -15,6 +15,21 @@ Run: `dotnet run` (opens http://localhost:5178). Works on Windows, macOS and Lin
 
 Set `TT_IDLE_MINUTES` to change the idle-disconnect delay (0 disables). Logs go to `tracker.log` in the data folder.
 
+## Syncing between machines (Turso)
+Each machine keeps its own local database and works offline. If a Turso database is configured, the app also syncs with it every 30 seconds and shortly after each change; the newest edit to a row wins. Timers started on one machine show up on the others, and starting a task elsewhere ends the running one.
+
+1. Create a database at https://app.turso.tech and generate a token for it (read & write).
+2. On each machine, create `turso.json` in the data folder (see the top of this file for its location):
+   ```json
+   { "url": "libsql://your-database-name-your-org.turso.io", "token": "<token>" }
+   ```
+   or set `TT_TURSO_URL` and `TT_TURSO_TOKEN`. Without either, sync is off and nothing changes.
+3. Start the app. A "Synced" pill appears next to the ZEI status. Errors show there and in `tracker.log`.
+
+Tables are created on the Turso side automatically. The first machine to sync uploads its history; the others download it. Set `TT_SYNC_SECONDS` to change the interval (minimum 5). Only one machine can hold the ZEI's Bluetooth connection at a time.
+
+`TT_DATA_DIR` and `TT_PORT` run a second copy side by side (separate data folder and port), for testing.
+
 ## Building
 The target platform comes from the runtime identifier: by default the machine you build on, or pass `-r`.
 

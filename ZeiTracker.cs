@@ -9,6 +9,7 @@ public class ZeiTracker(Db db, ILogger log) : BackgroundService
     public bool Connected { get; private set; }
     public int Side { get; private set; }
     public int RawSide { get; private set; } = -1; // last value read, even if ignored
+    private int sideChangeDelay = 5000;  // ms
 
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
@@ -54,7 +55,7 @@ public class ZeiTracker(Db db, ILogger log) : BackgroundService
         var idle = false;
         while (!conn.Disconnected.IsCompleted)
         {
-            await Task.WhenAny(conn.Disconnected, Task.Delay(1000, ct));
+            await Task.WhenAny(conn.Disconnected, Task.Delay(sideChangeDelay, ct));
             ct.ThrowIfCancellationRequested();
             if (conn.Disconnected.IsCompleted) break;
             if (await conn.ReadSide() is { } r) OnValue(r);
